@@ -581,11 +581,6 @@ function MediaMTXDashboard() {
                         <CardTitle>Active Streams</CardTitle>
                         <CardDescription>Currently active streaming paths and their status</CardDescription>
                       </div>
-                      {diskSpace && (
-                        <span className="ml-2 px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700" title="Free disk space">
-                          Free: {(diskSpace.free / 1024 / 1024 / 1024).toFixed(1)} GB
-                        </span>
-                      )}
                     </div>
                   </div>
                   {diskSpace && (() => {
