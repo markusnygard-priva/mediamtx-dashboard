@@ -1085,9 +1085,16 @@ function MediaMTXDashboard() {
                         <Button variant="outline" onClick={() => setIsAddPathDialogOpen(false)} disabled={isSubmitting}>
                           Cancel
                         </Button>
-                        <Button onClick={handleAddPath} disabled={isSubmitting}>
+                        <Button
+                          onClick={handleAddPath}
+                          disabled={isSubmitting || (diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10)}
+                          title={diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10 ? "Not enough disk space to start recording (min 10GB required)" : undefined}
+                        >
                           {isSubmitting ? "Adding..." : "Add Path"}
                         </Button>
+                        {diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10 && (
+                          <div className="text-red-600 text-xs mt-2">Not enough disk space to start a new recording. At least 10GB is required.</div>
+                        )}
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
@@ -1457,10 +1464,14 @@ function MediaMTXDashboard() {
                               variant={isRecording ? "destructive" : "default"}
                               className={isRecording ? "" : "bg-green-600 hover:bg-green-700 text-white"}
                               onClick={handleRecordingToggle}
-                              disabled={!path.ready}
+                              disabled={!path.ready || (diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10)}
+                              title={diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10 ? "Not enough disk space to start recording (min 10GB required)" : undefined}
                             >
                               {isRecording ? "Stop" : "Record"}
                             </Button>
+                            {(!isRecording && diskSpace && (diskSpace.free / 1024 / 1024 / 1024) < 10) && (
+                              <div className="text-red-600 text-xs mt-2">Not enough disk space to start a new recording. At least 10GB is required.</div>
+                            )}
                             {showDownloadButton && (
                               <Button 
                                 size="sm" 
@@ -1858,3 +1869,4 @@ function MediaMTXDashboard() {
 }
 
 export default MediaMTXDashboard;
+// recording finish OK
