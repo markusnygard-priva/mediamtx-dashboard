@@ -43,6 +43,16 @@ import { StreamPlayer } from "@/components/stream-player"
 import * as api from "@/lib/mediamtx-api"
 // ...existing code...
 function MediaMTXDashboard() {
+  // Disk space state for Active Streams card
+  const [diskSpace, setDiskSpace] = useState<{ free: number } | null>(null);
+  useEffect(() => {
+    let ignore = false;
+    fetch("http://192.168.8.23:5002/api/diskspace")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!ignore) setDiskSpace(data); })
+      .catch(() => { if (!ignore) setDiskSpace(null); });
+    return () => { ignore = true; };
+  }, []);
   const [livePaths, setLivePaths] = useState<any[]>([]);
   // Additional state declarations to fix missing variables
   const [paths, setPaths] = useState<any[]>([]);
@@ -564,8 +574,33 @@ function MediaMTXDashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Active Streams</CardTitle>
-                <CardDescription>Currently active streaming paths and their status</CardDescription>
+                <div className="flex items-center justify-between w-full">
+                  <div>
+                    <div className="flex items-center justify-between w-full">
+                      <div>
+                        <CardTitle>Active Streams</CardTitle>
+                        <CardDescription>Currently active streaming paths and their status</CardDescription>
+                      </div>
+                      {diskSpace && (
+                        <span className="ml-2 px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700" title="Free disk space">
+                          Free: {(diskSpace.free / 1024 / 1024 / 1024).toFixed(1)} GB
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {diskSpace && (() => {
+                    const freeGB = diskSpace.free / 1024 / 1024 / 1024;
+                    let badgeClass = "bg-green-100 text-green-700";
+                    if (freeGB <= 40 && freeGB > 20) badgeClass = "bg-orange-100 text-orange-700";
+                    if (freeGB <= 20 && freeGB > 10) badgeClass = "bg-red-100 text-red-700";
+                    if (freeGB <= 10) badgeClass = "bg-red-700 text-white";
+                    return (
+                      <span className={`ml-2 px-2 py-1 rounded text-xs font-semibold ${badgeClass}`} title="Free disk space">
+                        Free: {freeGB.toFixed(1)} GB
+                      </span>
+                    );
+                  })()}
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoadingPaths ? (
