@@ -68,8 +68,8 @@ Or, using Docker Compose for a local containerized environment:
 
 
 ```bash
-NEXT_PUBLIC_MEDIAMTX_API_URL=http://localhost:9997
-NEXT_PUBLIC_MEDIAMTX_HLS_URL=http://localhost:8888
+NEXT_PUBLIC_MEDIAMTX_API_URL=http://192.168.8.23:9997
+NEXT_PUBLIC_MEDIAMTX_HLS_URL=http://192.168.8.23:8888
 MTX_WEBRTCADDITIONALHOSTS="localhost"
 ```
 

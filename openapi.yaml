@@ -7,7 +7,7 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
 servers:
-  - url: http://localhost:9997
+  - url: http://192.168.8.23:9997
 security:
   - basicAuth: []
 components:

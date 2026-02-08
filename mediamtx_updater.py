@@ -7,7 +7,7 @@ import sys
 from requests.auth import HTTPBasicAuth
 
 # Configuration
-MEDIAMTX_API_URL = "http://localhost:9997/v3/config/paths/list"
+MEDIAMTX_API_URL = "http://192.168.8.23:9997/v3/config/paths/list"
 MEDIAMTX_CONFIG_PATH = "./mediamtx.yml"  # Update this to your actual path
 MEDIAMTX_USERNAME = "admin"
 MEDIAMTX_PASSWORD = "adminpass"
