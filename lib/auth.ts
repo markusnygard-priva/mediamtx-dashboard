@@ -1,6 +1,16 @@
+
+// Helper to get credentials from environment variables (for server-side)
+function getEnvUsername(): string | null {
+  return process.env.MEDIAMTX_API_USERNAME || null;
+}
+
+function getEnvPassword(): string | null {
+  return process.env.MEDIAMTX_API_PASSWORD || null;
+}
+
 export function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null
-  return sessionStorage.getItem("mediamtx_auth")
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem("mediamtx_auth");
 }
 
 export function getUsername(): string | null {
@@ -23,6 +33,14 @@ export function isAuthenticated(): boolean {
 }
 
 export function getAuthHeader(): string {
-  const token = getAuthToken()
-  return token ? `Basic ${token}` : ""
+  // Try to use credentials from .env (server-side)
+  const envUser = getEnvUsername();
+  const envPass = getEnvPassword();
+  if (envUser && envPass) {
+    const encoded = Buffer.from(`${envUser}:${envPass}`).toString("base64");
+    return `Basic ${encoded}`;
+  }
+  // Fallback to sessionStorage (client-side)
+  const token = getAuthToken();
+  return token ? `Basic ${token}` : "";
 }

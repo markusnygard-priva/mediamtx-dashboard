@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clipmaker</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #181818; color: #fff; }
+    .container { max-width: 700px; margin: 2rem auto; background: #232323; border-radius: 8px; padding: 2rem; box-shadow: 0 2px 8px #0008; }
+    video { width: 100%; border-radius: 8px; background: #000; }
+    .controls { margin-top: 1rem; display: flex; gap: 1rem; align-items: center; }
+    .marks { margin-top: 1rem; }
+    button { background: #2d8cf0; color: #fff; border: none; border-radius: 4px; padding: 0.5rem 1rem; cursor: pointer; }
+    button:disabled { background: #555; }
+    input[type="file"] { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Clipmaker</h1>
+    <video id="video" controls style="cursor:pointer;"></video>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+    <script src="ffmpeg.js"></script>
+    <div class="controls">
+      <button id="loadStream">Load mystream</button>
+      <input type="file" id="fileInput" accept="video/mp4,video/*" />
+      <button id="markIn">Mark In</button>
+      <button id="markOut">Mark Out</button>
+      <button id="exportClip" disabled>Export Clip</button>
+    </div>
+    <div class="marks">
+      <span id="inMark">In: --:--</span> | <span id="outMark">Out: --:--</span>
+    </div>
+    <div id="status"></div>
+  </div>
+  <script src="clipmaker.js"></script>
+</body>
+</html>

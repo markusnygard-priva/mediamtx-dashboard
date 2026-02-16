@@ -1,0 +1,12 @@
+{
+  "name": "clipmaker",
+  "version": "1.0.0",
+  "description": "Standalone browser-based video clipmaker using ffmpeg.wasm.",
+  "private": true,
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.6"
+  }
+}
