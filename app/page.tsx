@@ -1,1252 +1,495 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { 
+  Dialog, DialogTrigger, DialogContent, DialogHeader, 
+  DialogTitle, DialogDescription, DialogFooter 
+} from "@/components/ui/dialog";
+import { 
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Server,
-  Users,
-  Video,
-  Shield,
-  Activity,
-  Play,
-  Radio,
-  Globe,
-  Eye,
-  RefreshCw,
-  Plus,
-  Trash2,
-  Monitor,
-  LogOut,
-  Edit,
-  VideoIcon,
-} from "lucide-react"
-import { ProtectedRoute } from "@/components/protected-route"
-import { clearAuth, getUsername } from "@/lib/auth"
-import { StreamPlayer } from "@/components/stream-player"
-import * as api from "@/lib/mediamtx-api"
-import type { PathConfig, Path as LivePath } from "@/lib/mediamtx-api"
+  Server, Radio, Eye, RefreshCw, Trash2, Monitor, LogOut, 
+  VideoIcon, Square, Shield, Activity, Video, Play, Plus, Globe, Moon, Sun
+} from "lucide-react";
 
-function MediaMTXDashboard() {
-  const router = useRouter()
-  const username = getUsername()
+import { ProtectedRoute } from "@/components/protected-route";
+import { clearAuth, getUsername } from "@/lib/auth";
+import { StreamPlayer } from "@/components/stream-player";
+import * as api from "@/lib/mediamtx-api";
+import type { PathConfig, Path as LivePath } from "@/lib/mediamtx-api";
 
-  const [config, setConfig] = useState({
-    logLevel: "info",
-    rtsp: true,
-    rtspAddress: ":8554",
-    rtmp: true,
-    rtmpAddress: ":1935",
-    hls: true,
-    hlsAddress: ":8888",
-    webrtc: true,
-    webrtcAddress: ":8889",
-    api: false,
-    apiAddress: ":9997",
-    metrics: false,
-    metricsAddress: ":9998",
-  })
+// --- THEME TOKENS (GUNMETAL & SILVER) ---
+const themes = {
+  light: {
+    bg: "bg-[#f0f2f5]", 
+    header: "bg-[#ffffff] border-[#d0d7de]",
+    card: "bg-[#ffffff] border-[#d8dee4]",
+    text: "text-[#1f2328]",
+    textMuted: "text-[#57606a]",
+    border: "border-[#d0d7de]",
+    input: "bg-[#ffffff] border-[#d0d7de] text-[#1f2328]",
+    tabActive: "border-[#0969da] text-[#0969da]",
+    codeBg: "bg-[#f6f8fa] text-[#0969da]",
+  },
+  dark: {
+    bg: "bg-[#2d333b]", // Gunmetal Slate
+    header: "bg-[#22272e] border-[#444c56]",
+    card: "bg-[#373e47] border-[#444c56]", // Medium Charcoal
+    text: "text-[#f0f6fc]", // Silver
+    textMuted: "text-[#adbac7]",
+    border: "border-[#444c56]",
+    input: "bg-[#22272e] border-[#444c56] text-[#f0f6fc]",
+    tabActive: "border-[#58a6ff] text-[#58a6ff]", 
+    codeBg: "bg-[#22272e] text-[#58a6ff]",
+  }
+};
 
-  const [paths, setPaths] = useState<PathConfig[]>([])
-  const [livePaths, setLivePaths] = useState<LivePath[]>([])
-  const [isLoadingPaths, setIsLoadingPaths] = useState(false)
-  const [selectedStreamPath, setSelectedStreamPath] = useState<string | null>(null)
-  const [editingPath, setEditingPath] = useState<PathConfig | null>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [pathToDelete, setPathToDelete] = useState<string | null>(null)
+// --- SUB-COMPONENT: FrigateDropdown ---
+function FrigateDropdown({ sourceStreamName, onSuccess, theme }: { sourceStreamName: string, onSuccess?: () => void, theme: any }) {
+  const [loading, setLoading] = useState(false);
+  const [showDialog, setShowDialog] = useState(false);
+  const [pendingSlot, setPendingSlot] = useState("");
+  const options = Array.from({ length: 10 }, (_, i) => `frigate_${i + 1}`);
 
-  const [isAddPathDialogOpen, setIsAddPathDialogOpen] = useState(false)
-  const [newPath, setNewPath] = useState({
-    name: "",
-    source: "",
-    sourceFingerprint: "",
-    sourceOnDemand: true,
-    record: false,
-    recordPath: "./recordings/%path/%Y-%m-%d_%H-%M-%S-%f",
-    recordFormat: "fmp4",
-    recordPartDuration: "1s",
-    recordSegmentDuration: "1h",
-    recordDeleteAfter: "0s",
-    maxReaders: 0,
-    overridePublisher: true,
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const fetchPaths = async () => {
-    setIsLoadingPaths(true)
+  const handleConfirmLink = async () => {
+    setLoading(true);
+    const sourceUrl = `rtsp://127.0.0.1:8556/${sourceStreamName}`;
     try {
-      const [configs, live] = await Promise.all([api.getPathConfigs(), api.getPaths()])
-      setPaths(configs.filter((p) => p.name !== "all_others"))
-      setLivePaths(live)
-    } catch (error) {
-      console.error("Error fetching paths:", error)
-      alert("Failed to load paths")
-    } finally {
-      setIsLoadingPaths(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchPaths()
-    const interval = setInterval(fetchPaths, 10000) // Refresh every 10 seconds
-    return () => clearInterval(interval)
-  }, [])
-
-  const handleEditPath = async (path: PathConfig) => {
-    setEditingPath(path)
-    setIsEditDialogOpen(true)
-  }
-
-  const handleUpdatePath = async () => {
-    if (!editingPath) return
-
-    setIsSubmitting(true)
-    try {
-      await api.updatePath(editingPath.name, editingPath)
-      await fetchPaths()
-      setIsEditDialogOpen(false)
-      setEditingPath(null)
-      alert("Path updated successfully!")
-    } catch (error) {
-      console.error("Error updating path:", error)
-      alert(`Failed to update path: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleDeletePath = async () => {
-    if (!pathToDelete) return
-
-    setIsSubmitting(true)
-    try {
-      await api.deletePath(pathToDelete)
-      await fetchPaths()
-      setIsDeleteDialogOpen(false)
-      setPathToDelete(null)
-      alert("Path deleted successfully!")
-    } catch (error) {
-      console.error("Error deleting path:", error)
-      alert(`Failed to delete path: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const confirmDelete = (pathName: string) => {
-    setPathToDelete(pathName)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const getPathStatus = (pathName: string) => {
-    const livePath = livePaths.find((p) => p.name === pathName)
-    return {
-      isLive: livePath?.ready || false,
-      source: livePath?.source?.type || null,
-      readers: livePath?.readers.length || 0,
-      bytesReceived: livePath?.bytesReceived || 0,
-      bytesSent: livePath?.bytesSent || 0,
-    }
-  }
-
-  const handleLogout = () => {
-    clearAuth()
-    router.push("/login")
-  }
-
-  const handleAddPath = async () => {
-    if (!newPath.name) {
-      alert("Please enter a path name")
-      return
-    }
-
-    if (!newPath.source) {
-      alert("Please enter a source URL")
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      await api.addPath(newPath as PathConfig)
-      await fetchPaths()
-
-      // Reset form and close dialog
-      setNewPath({
-        name: "",
-        source: "",
-        sourceFingerprint: "",
-        sourceOnDemand: true,
-        record: false,
-        recordPath: "./recordings/%path/%Y-%m-%d_%H-%M-%S-%f",
-        recordFormat: "fmp4",
-        recordPartDuration: "1s",
-        recordSegmentDuration: "1h",
-        recordDeleteAfter: "0s",
-        maxReaders: 0,
-        overridePublisher: true,
-      })
-      setIsAddPathDialogOpen(false)
-      alert("Path added successfully!")
-    } catch (error) {
-      console.error("Error adding path:", error)
-      alert(`Error adding path: ${error instanceof Error ? error.message : "Unknown error"}`)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Replace the activeStreams useState with calculated values
-  const activeStreamsCount = livePaths.filter((p) => p.ready).length
-  const totalViewers = livePaths.reduce((sum, p) => sum + p.readers.length, 0)
+      await api.updatePath(pendingSlot, sourceUrl);
+      setShowDialog(false);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      try {
+        await api.addPath(pendingSlot, sourceUrl);
+        setShowDialog(false);
+        if (onSuccess) onSuccess();
+      } catch (err2: any) { alert("API Error: " + err2.message); }
+    } finally { setLoading(false); }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="border-b bg-white">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
-                <Radio className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">MediaMTX Dashboard</h1>
-                <p className="text-sm text-gray-500">Media streaming server management</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                <Activity className="w-3 h-3 mr-1" />
-                Online
-              </Badge>
-              <div className="flex items-center space-x-2 px-3 py-1.5 bg-gray-100 rounded-md">
-                <Users className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">{username}</span>
-              </div>
-              <Button size="sm" variant="outline" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
+    <>
+      <Select onValueChange={(v) => { setPendingSlot(v); setShowDialog(true); }} disabled={loading}>
+        <SelectTrigger size="sm" className={`w-[130px] mr-2 ${theme.input}`}>
+          <SelectValue placeholder="Link Frigate" />
+        </SelectTrigger>
+        <SelectContent className={`${theme.card} ${theme.text}`}>
+          {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className={`${theme.card} ${theme.text} border-none`}>
+          <DialogHeader><DialogTitle className={theme.text}>Confirm Bridge Routing</DialogTitle></DialogHeader>
+          <div className="py-6 text-lg">Route <b>{sourceStreamName}</b> into <b>{pendingSlot}</b>?</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)} className={theme.border}>Cancel</Button>
+            <Button onClick={handleConfirmLink} disabled={loading} className="bg-[#238636] hover:bg-[#2ea043] text-white">Confirm Link</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// --- HELPER: Protocol URL Buttons ---
+function StreamUrlButton({ protocol, pathName, ip, theme }: { protocol: string, pathName: string, ip: string, theme: any }) {
+  const [open, setOpen] = useState(false);
+  let url = "";
+  if (protocol === "SRT") url = `srt://${ip}:8890?streamid=publish:${pathName}`;
+  if (protocol === "RTMP") url = `rtmp://${ip}:1935/${pathName}`;
+  if (protocol === "RTSP") url = `rtsp://${ip}:8554/${pathName}`;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button size="sm" variant="outline" className={`${theme.border} text-[#58a6ff] hover:bg-[#58a6ff]/10 font-bold`}>{protocol}</Button></DialogTrigger>
+      <DialogContent className={`${theme.card} ${theme.text} border-none`}>
+        <DialogHeader><DialogTitle className={theme.text}>{protocol} Publish Link</DialogTitle></DialogHeader>
+        <code className={`text-xs p-4 rounded-lg break-all border font-mono shadow-inner ${theme.codeBg} border-[#444c56]`}>{url}</code>
+        <Button className="mt-4 bg-[#444c56] text-white hover:bg-[#57606a] font-bold" onClick={() => { navigator.clipboard.writeText(url); setOpen(false); }}>Copy to Clipboard</Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- MAIN DASHBOARD ---
+function MediaMTXDashboard() {
+  const router = useRouter();
+  const [isDark, setIsDark] = useState(true);
+  const theme = isDark ? themes.dark : themes.light;
+
+  const [serverIP, setServerIP] = useState("192.168.8.23");
+  const [paths, setPaths] = useState<PathConfig[]>([]);
+  const [livePaths, setLivePaths] = useState<LivePath[]>([]);
+  const [selectedStream, setSelectedStream] = useState<string | null>(null);
+  const [lastActiveMap, setLastActiveMap] = useState<Record<string, number>>({});
+  
+  const [isAddPathDialogOpen, setIsAddPathDialogOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [newPath, setNewPath] = useState({ name: "", source: "publisher", sourceFingerprint: "", sourceOnDemand: false });
+
+  const [config, setConfig] = useState({ 
+    logLevel: "info", 
+    rtsp: true, 
+    rtmp: true, 
+    hls: true,
+    api: true,
+    metrics: false
+  });
+
+  const fetchPaths = async () => {
+    try {
+      const [configData, liveData] = await Promise.all([api.getPathConfigs(), api.getPaths()]);
+      const configs = configData?.items || [];
+      const liveItems = liveData?.items || [];
+      const now = Date.now();
+      const updatedMap = { ...lastActiveMap };
+      liveItems.forEach((lp: any) => { if (lp.ready) updatedMap[lp.name] = now; });
+      setLastActiveMap(updatedMap);
+      setPaths(configs.filter((p: any) => p.name !== "all_others"));
+      setLivePaths(liveItems);
+    } catch (e) { console.error("Fetch Error:", e); }
+  };
+
+  useEffect(() => {
+    fetchPaths();
+    const inv = setInterval(fetchPaths, 5000);
+    return () => clearInterval(inv);
+  }, []);
+
+  const getStatus = (name: string) => {
+    const live = livePaths.find(p => p.name === name);
+    return { isLive: live?.ready || false, readers: live?.readers?.length || 0 };
+  };
+
+  const handleStopRecording = async (pathName: string) => {
+    try { await api.deletePath(pathName); fetchPaths(); } catch (err: any) { alert("Error: " + err.message); }
+  };
+
+  const handleCreatePath = async () => {
+    try { 
+      await api.addPath(newPath.name, newPath.source); 
+      setIsAddPathDialogOpen(false); 
+      setIsQuickAddOpen(false);
+      setNewPath({ name: "", source: "publisher", sourceFingerprint: "", sourceOnDemand: false }); 
+      fetchPaths(); 
+    } catch (err: any) { alert("Create Error: " + err.message); }
+  };
+
+  const sortedPaths = [...paths].sort((a, b) => {
+    const statA = getStatus(a.name); const statB = getStatus(b.name);
+    if (statA.isLive && !statB.isLive) return -1;
+    if (!statA.isLive && statB.isLive) return 1;
+    return (lastActiveMap[b.name] || 0) - (lastActiveMap[a.name] || 0) || a.name.localeCompare(b.name);
+  });
+
+  return (
+    <div className={`min-h-screen ${theme.bg} ${theme.text} transition-colors duration-300 selection:bg-[#58a6ff]/30`}>
+      {/* HEADER */}
+      <div className={`border-b ${theme.header} px-8 py-5 flex justify-between items-center sticky top-0 z-40 backdrop-blur-md`}>
+        <div className="flex items-center gap-4">
+          <div className="p-2 bg-blue-600 rounded-lg shadow-blue-500/20 shadow-lg">
+            <Radio className="text-white w-6 h-6 animate-pulse" />
           </div>
+          <h1 className={`text-xl font-black tracking-tighter uppercase ${theme.text}`}>MediaMTX <span className="text-[#58a6ff]">Matrix</span></h1>
+        </div>
+        <div className="flex items-center gap-5">
+          <Button variant="ghost" size="icon" onClick={() => setIsDark(!isDark)} className={`${theme.textMuted} hover:text-white`}>
+            {isDark ? <Sun size={22} /> : <Moon size={22} />}
+          </Button>
+          <Badge variant="outline" className={`${theme.border} text-[#58a6ff] font-mono px-4 py-1.5 uppercase tracking-widest text-[11px] font-bold`}>NODE: {serverIP}</Badge>
+          <Button size="sm" variant="ghost" className={theme.textMuted} onClick={() => { clearAuth(); router.push("/login"); }}><LogOut size={18} /></Button>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="overview" className="flex items-center space-x-2">
-              <Monitor className="w-4 h-4" />
-              <span>Overview</span>
-            </TabsTrigger>
-            <TabsTrigger value="server" className="flex items-center space-x-2">
-              <Server className="w-4 h-4" />
-              <span>Server</span>
-            </TabsTrigger>
-            <TabsTrigger value="paths" className="flex items-center space-x-2">
-              <Video className="w-4 h-4" />
-              <span>Paths</span>
-            </TabsTrigger>
-            <TabsTrigger value="auth" className="flex items-center space-x-2">
-              <Shield className="w-4 h-4" />
-              <span>Auth</span>
-            </TabsTrigger>
-            <TabsTrigger value="recording" className="flex items-center space-x-2">
-              <Play className="w-4 h-4" />
-              <span>Recording</span>
-            </TabsTrigger>
-            <TabsTrigger value="monitoring" className="flex items-center space-x-2">
-              <Activity className="w-4 h-4" />
-              <span>Monitoring</span>
-            </TabsTrigger>
+      <div className="container mx-auto px-8 py-10 max-w-7xl">
+        <Tabs defaultValue="overview" className="space-y-8">
+          <TabsList className={`bg-transparent border-b ${theme.border} w-full flex justify-start rounded-none h-14 p-0 gap-10`}>
+            {["overview", "recording", "server", "paths", "auth", "monitoring"].map(tab => (
+              <TabsTrigger 
+                key={tab} 
+                value={tab} 
+                className={`rounded-none border-b-2 border-transparent data-[state=active]:${theme.tabActive} bg-transparent px-2 h-full uppercase text-[12px] font-black tracking-widest transition-all duration-300`}
+              >
+                {tab}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Streams</CardTitle>
-                  <Video className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{activeStreamsCount}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {activeStreamsCount} live, {paths.length - activeStreamsCount} idle
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Viewers</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalViewers}</div>
-                  <p className="text-xs text-muted-foreground">Across all streams</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Paths</CardTitle>
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{paths.length}</div>
-                  <p className="text-xs text-muted-foreground">Configured paths</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Server Status</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">Online</div>
-                  <p className="text-xs text-muted-foreground">Running smoothly</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Streams</CardTitle>
-                <CardDescription>Currently active streaming paths and their status</CardDescription>
+          {/* OVERVIEW TAB */}
+          <TabsContent value="overview">
+            <Card className={`${theme.card} shadow-2xl rounded-2xl overflow-hidden border-none`}>
+              <CardHeader className={`flex flex-row items-center justify-between border-b ${theme.header} py-6 px-8`}>
+                <CardTitle className={`text-sm font-black uppercase tracking-widest ${theme.text}`}>Active Stream Matrix</CardTitle>
+                <div className="flex gap-3">
+                   <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
+                    <DialogTrigger asChild><Button size="sm" className="bg-[#238636] hover:bg-[#2ea043] text-white border-none shadow-lg px-6 font-bold h-10"><Plus size={18} className="mr-2" /> Quick Add</Button></DialogTrigger>
+                    <DialogContent className={`${theme.card} ${theme.text}`}>
+                      <DialogHeader><DialogTitle className={theme.text}>Quick Publisher Add</DialogTitle></DialogHeader>
+                      <div className="py-4 space-y-4">
+                        <Label className="text-[#768390] uppercase text-[10px] font-bold">Path Name / Stream ID</Label>
+                        <Input placeholder="e.g. drone_front" className={`${theme.input} h-12 text-lg`} value={newPath.name} onChange={e => setNewPath({...newPath, name: e.target.value})} />
+                      </div>
+                      <DialogFooter><Button onClick={handleCreatePath} className="bg-[#238636] w-full text-white h-12 font-black text-lg">CREATE STREAM</Button></DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Button onClick={fetchPaths} size="sm" variant="outline" className={`${theme.border} hover:bg-slate-700 h-10`}><RefreshCw size={16} className={theme.text} /></Button>
+                </div>
               </CardHeader>
-              <CardContent>
-                {isLoadingPaths ? (
-                  <div className="text-center py-8">
-                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2"></div>
-                    <p className="text-sm text-gray-600">Loading streams...</p>
-                  </div>
-                ) : paths.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <VideoIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No paths configured</p>
-                    <Button className="mt-4" onClick={() => setIsAddPathDialogOpen(true)}>
-                      Add Your First Path
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {paths.map((path) => {
-                      const status = getPathStatus(path.name)
-                      return (
-                        <div key={path.name} className="border rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between p-4">
-                            <div className="flex items-center space-x-4 flex-1">
-                              <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
-                                <VideoIcon className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-medium">{path.name}</h3>
-                                  {status.isLive && (
-                                    <Badge variant="default" className="bg-red-500">
-                                      <div className="w-2 h-2 bg-white rounded-full animate-pulse mr-1" />
-                                      LIVE
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-500">{path.source}</p>
-                                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                                  <span>{status.readers} viewers</span>
-                                  {status.isLive && (
-                                    <>
-                                      <span>↓ {(status.bytesReceived / 1024 / 1024).toFixed(2)} MB</span>
-                                      <span>↑ {(status.bytesSent / 1024 / 1024).toFixed(2)} MB</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  setSelectedStreamPath(selectedStreamPath === path.name ? null : path.name)
-                                }
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEditPath(path)}>
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => confirmDelete(path.name)}>
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </div>
-                          {selectedStreamPath === path.name && status.isLive && (
-                            <div className="px-4 pb-4">
-                              <StreamPlayer pathName={path.name} />
-                            </div>
-                          )}
+              <CardContent className="p-6 space-y-3">
+                {sortedPaths.map(p => {
+                  const s = getStatus(p.name);
+                  const isFrigate = p.name.startsWith("frigate_");
+                  let accentClass = s.isLive ? (isFrigate ? "border-l-4 border-l-[#58a6ff] bg-[#58a6ff]/10" : "border-l-4 border-l-[#cf222e] bg-[#cf222e]/10") : "bg-[#2d333b]/40";
+                  
+                  return (
+                    <div key={p.name} className={`flex items-center justify-between p-5 border ${theme.border} rounded-xl shadow-sm transition-all hover:scale-[1.005] ${accentClass}`}>
+                      <div className="flex items-center gap-6">
+                        <div className={`p-3 rounded-full ${s.isLive ? (isFrigate ? 'bg-[#58a6ff]/20 text-[#58a6ff]' : 'bg-[#cf222e]/20 text-[#cf222e]') : 'bg-slate-700 text-slate-500'}`}>
+                          <VideoIcon size={24} />
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        <div>
+                          <div className={`font-black text-lg flex items-center gap-3 tracking-tight ${theme.text}`}>
+                            {p.name} {s.isLive && <Badge className={`${isFrigate ? 'bg-[#1f6feb]' : 'bg-[#cf222e]'} text-white`}>LIVE</Badge>}
+                          </div>
+                          <div className={`text-[11px] font-mono uppercase tracking-tighter ${theme.textMuted} mt-1`}>{p.source || "awaiting publisher ingest"}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {!isFrigate && <FrigateDropdown sourceStreamName={p.name} onSuccess={fetchPaths} theme={theme} />}
+                        {isFrigate && s.isLive && (
+                          <Button variant="destructive" size="sm" onClick={() => handleStopRecording(p.name)} className="bg-[#cf222e] hover:bg-[#a61b25] h-9 text-[11px] font-black px-4 shadow-lg shadow-red-900/20">STOP REC</Button>
+                        )}
+                        <div className="flex bg-[#22272e] p-1 rounded-lg border border-[#444c56]/50 gap-1.5 shadow-inner">
+                          <StreamUrlButton protocol="SRT" pathName={p.name} ip={serverIP} theme={theme} />
+                          <StreamUrlButton protocol="RTMP" pathName={p.name} ip={serverIP} theme={theme} />
+                          <StreamUrlButton protocol="RTSP" pathName={p.name} ip={serverIP} theme={theme} />
+                        </div>
+                        <Button size="sm" variant="outline" className={`${theme.border} hover:bg-[#58a6ff]/20`} onClick={() => setSelectedStream(selectedStream === p.name ? null : p.name)}><Eye size={18} className="text-[#58a6ff]" /></Button>
+                        <Button size="icon" variant="ghost" className="text-red-500/50 hover:text-red-500 hover:bg-red-500/10" onClick={() => api.deletePath(p.name).then(fetchPaths)}><Trash2 size={16} /></Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="server" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>General Settings</CardTitle>
-                  <CardDescription>Basic server configuration</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="logLevel">Log Level</Label>
-                    <Select
-                      value={config.logLevel}
-                      onValueChange={(value) => setConfig({ ...config, logLevel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="error">Error</SelectItem>
-                        <SelectItem value="warn">Warning</SelectItem>
-                        <SelectItem value="info">Info</SelectItem>
-                        <SelectItem value="debug">Debug</SelectItem>
+          {/* RECORDING TAB */}
+          <TabsContent value="recording">
+             <Card className={`${theme.card} rounded-2xl shadow-2xl border-none`}>
+               <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Active Frigate Bridge Sessions</CardTitle></CardHeader>
+               <CardContent className="p-10 space-y-6">
+                {paths.filter(p => getStatus(p.name).isLive && p.name.startsWith("frigate_")).length === 0 ? (
+                  <div className={`text-center py-24 ${theme.textMuted} text-lg italic border-2 border-dashed ${theme.border} rounded-3xl`}>No active stream routes bridged to Frigate NVR.</div>
+                ) : (
+                  paths.filter(p => getStatus(p.name).isLive && p.name.startsWith("frigate_")).map(p => (
+                    <div key={p.name} className={`flex items-center justify-between p-8 border ${theme.border} rounded-3xl bg-[#1f6feb]/5 shadow-lg`}>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-black text-[#58a6ff] text-2xl uppercase tracking-tighter drop-shadow-sm">{p.name}</span>
+                        <span className="text-[10px] text-[#768390] uppercase font-black tracking-widest">NVR Feed Status: Healthy / Transmitting</span>
+                      </div>
+                      <div className="flex gap-4">
+                        <Button size="lg" variant="outline" className={`bg-[#22272e] ${theme.border} text-white h-14 px-10 rounded-2xl hover:bg-slate-700 font-bold`} onClick={() => window.open(`http://${serverIP}:7000/#${p.name}`, "_blank")}>
+                          <Eye size={24} className="mr-3 text-[#58a6ff]" /> Open Frigate View
+                        </Button>
+                        <Button variant="destructive" size="lg" onClick={() => handleStopRecording(p.name)} className="bg-[#cf222e] hover:bg-[#a61b25] h-14 px-10 rounded-2xl font-black shadow-xl shadow-red-900/40">STOP BRIDGE</Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+             </CardContent></Card>
+          </TabsContent>
+
+          {/* SERVER TAB */}
+          <TabsContent value="server" className="space-y-8">
+            <Card className={`${theme.card} border-[#58a6ff]/30 p-6 rounded-2xl`}>
+              <CardHeader className="p-0 pb-6"><CardTitle className={`text-lg font-black ${theme.text} flex items-center gap-3`}><Globe className="text-[#58a6ff]" /> Node Setup</CardTitle></CardHeader>
+              <CardContent className="p-0 flex gap-6 items-end">
+                <div className="flex-1 space-y-3">
+                  <Label className="text-xs uppercase text-[#768390] font-black tracking-widest ml-1">MediaMTX IP Address</Label>
+                  <Input value={serverIP} onChange={e => setServerIP(e.target.value)} className={`${theme.input} h-14 text-xl font-mono px-5 rounded-xl border-[#444c56] focus:border-[#58a6ff] shadow-inner`} />
+                </div>
+                <Button className="bg-[#1f6feb] hover:bg-[#388bfd] text-white font-black h-14 px-12 rounded-xl text-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95">UPDATE NODE</Button>
+              </CardContent>
+            </Card>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className={`${theme.card} rounded-2xl shadow-xl`}>
+                <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>System Preferences</CardTitle></CardHeader>
+                <CardContent className="space-y-8 p-8">
+                  <div className="space-y-3">
+                    <Label className="text-[#768390] text-[11px] font-bold uppercase tracking-wider ml-1">Logging Verbosity</Label>
+                    <Select value={config.logLevel} onValueChange={v => setConfig({...config, logLevel: v})}>
+                      <SelectTrigger className={`${theme.input} h-12 rounded-xl shadow-inner`}><SelectValue /></SelectTrigger>
+                      <SelectContent className={`${theme.card} border-[#444c56] text-[#f0f6fc]`}>
+                        <SelectItem value="info" className="font-bold">INFO (Standard)</SelectItem>
+                        <SelectItem value="error" className="font-bold">ERROR Only</SelectItem>
+                        <SelectItem value="debug" className="font-bold">DEBUG (Verbose)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="readTimeout">Read Timeout</Label>
-                    <Input id="readTimeout" defaultValue="10s" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="writeTimeout">Write Timeout</Label>
-                    <Input id="writeTimeout" defaultValue="10s" />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3"><Label className="text-[#768390] text-[10px] font-bold uppercase ml-1">Read Timeout</Label><Input defaultValue="10s" className={`${theme.input} h-12 rounded-xl shadow-inner`} /></div>
+                    <div className="space-y-3"><Label className="text-[#768390] text-[10px] font-bold uppercase ml-1">Write Timeout</Label><Input defaultValue="10s" className={`${theme.input} h-12 rounded-xl shadow-inner`} /></div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Protocol Settings</CardTitle>
-                  <CardDescription>Enable/disable streaming protocols</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>RTSP Server</Label>
-                      <p className="text-sm text-muted-foreground">Real Time Streaming Protocol</p>
-                    </div>
-                    <Switch
-                      checked={config.rtsp}
-                      onCheckedChange={(checked) => setConfig({ ...config, rtsp: checked })}
-                    />
-                  </div>
-                  {config.rtsp && (
-                    <div className="space-y-2 ml-4">
-                      <Label htmlFor="rtspAddress">RTSP Address</Label>
-                      <Input
-                        id="rtspAddress"
-                        value={config.rtspAddress}
-                        onChange={(e) => setConfig({ ...config, rtspAddress: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>RTMP Server</Label>
-                      <p className="text-sm text-muted-foreground">Real Time Messaging Protocol</p>
-                    </div>
-                    <Switch
-                      checked={config.rtmp}
-                      onCheckedChange={(checked) => setConfig({ ...config, rtmp: checked })}
-                    />
-                  </div>
-                  {config.rtmp && (
-                    <div className="space-y-2 ml-4">
-                      <Label htmlFor="rtmpAddress">RTMP Address</Label>
-                      <Input
-                        id="rtmpAddress"
-                        value={config.rtmpAddress}
-                        onChange={(e) => setConfig({ ...config, rtmpAddress: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>HLS Server</Label>
-                      <p className="text-sm text-muted-foreground">HTTP Live Streaming</p>
-                    </div>
-                    <Switch
-                      checked={config.hls}
-                      onCheckedChange={(checked) => setConfig({ ...config, hls: checked })}
-                    />
-                  </div>
-                  {config.hls && (
-                    <div className="space-y-2 ml-4">
-                      <Label htmlFor="hlsAddress">HLS Address</Label>
-                      <Input
-                        id="hlsAddress"
-                        value={config.hlsAddress}
-                        onChange={(e) => setConfig({ ...config, hlsAddress: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>WebRTC Server</Label>
-                      <p className="text-sm text-muted-foreground">Web Real-Time Communication</p>
-                    </div>
-                    <Switch
-                      checked={config.webrtc}
-                      onCheckedChange={(checked) => setConfig({ ...config, webrtc: checked })}
-                    />
-                  </div>
-                  {config.webrtc && (
-                    <div className="space-y-2 ml-4">
-                      <Label htmlFor="webrtcAddress">WebRTC Address</Label>
-                      <Input
-                        id="webrtcAddress"
-                        value={config.webrtcAddress}
-                        onChange={(e) => setConfig({ ...config, webrtcAddress: e.target.value })}
-                      />
-                    </div>
-                  )}
+              <Card className={`${theme.card} rounded-2xl shadow-xl`}>
+                <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>Active Listeners</CardTitle></CardHeader>
+                <CardContent className="space-y-4 p-8">
+                   {[
+                     { label: "RTSP Server", port: "8554", key: "rtsp" },
+                     { label: "RTMP Server", port: "1935", key: "rtmp" },
+                     { label: "HLS Server", port: "8888", key: "hls" }
+                   ].map(proto => (
+                     <div key={proto.key} className="flex justify-between items-center p-5 bg-black/20 rounded-2xl border border-[#444c56]/40 shadow-inner">
+                       <div className="space-y-0.5">
+                         <Label className={`font-bold text-lg ${theme.text}`}>{proto.label}</Label>
+                         <p className="text-[10px] text-[#768390] font-black uppercase tracking-tighter">LISTENING ON PORT {proto.port}</p>
+                       </div>
+                       <Switch checked={(config as any)[proto.key]} onCheckedChange={v => setConfig({...config, [proto.key]: v})} className="data-[state=checked]:bg-[#238636]" />
+                     </div>
+                   ))}
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>API & Monitoring</CardTitle>
-                <CardDescription>Control API and metrics endpoints</CardDescription>
+          {/* PATHS TAB */}
+          <TabsContent value="paths">
+            <Card className={`${theme.card} rounded-2xl shadow-2xl overflow-hidden border-none`}>
+              <CardHeader className={`flex flex-row items-center justify-between border-b ${theme.header} py-6 px-8`}>
+                <div><CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Stream Path Templates</CardTitle><CardDescription className="text-[#768390] mt-1">Define static camera sources and publishing permissions.</CardDescription></div>
+                <Dialog open={isAddPathDialogOpen} onOpenChange={setIsAddPathDialogOpen}>
+                  <DialogTrigger asChild><Button className="bg-[#347d39] hover:bg-[#46954a] text-white font-black px-8 h-12 rounded-xl shadow-lg border-none"><Plus size={20} className="mr-2" /> CREATE TEMPLATE</Button></DialogTrigger>
+                  <DialogContent className={`${theme.card} ${theme.text} max-w-2xl border-[#444c56] p-0 rounded-3xl overflow-hidden`}>
+                    <div className="p-8 bg-[#2d333b]"><DialogHeader><DialogTitle className="text-[#f0f6fc] text-2xl font-black uppercase tracking-tighter">New Path Configuration</DialogTitle></DialogHeader></div>
+                    <div className="p-8 space-y-8 bg-[#2d333b]/30">
+                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Unique Path ID / URL Component</Label><Input className={`${theme.input} h-12 text-lg font-bold rounded-xl`} value={newPath.name} onChange={e => setNewPath({...newPath, name: e.target.value})} /></div>
+                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Stream Source (e.g., publisher or rtsp://...)</Label><Input className={`${theme.input} h-12 font-mono rounded-xl text-[#58a6ff]`} value={newPath.source} onChange={e => setNewPath({...newPath, source: e.target.value})} /></div>
+                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Source Fingerprint (Optional)</Label><Input className={`${theme.input} h-12 font-mono rounded-xl opacity-60`} value={newPath.sourceFingerprint} onChange={e => setNewPath({...newPath, sourceFingerprint: e.target.value})} /></div>
+                      <div className="flex items-center justify-between p-5 bg-[#2d333b] rounded-2xl border border-[#444c56]/60 shadow-inner"><Label className="text-[#f0f6fc] font-bold">Enable Source On Demand</Label><Switch checked={newPath.sourceOnDemand} onCheckedChange={v => setNewPath({...newPath, sourceOnDemand: v})} className="data-[state=checked]:bg-[#347d39]" /></div>
+                    </div>
+                    <div className="p-6 bg-[#2d333b] border-t border-[#444c56] flex justify-end">
+                      <Button onClick={handleCreatePath} className="bg-[#347d39] hover:bg-[#46954a] text-white px-10 h-14 font-black rounded-2xl w-full text-xl shadow-xl">SAVE TEMPLATE</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Control API</Label>
-                        <p className="text-sm text-muted-foreground">Enable REST API</p>
-                      </div>
-                      <Switch
-                        checked={config.api}
-                        onCheckedChange={(checked) => setConfig({ ...config, api: checked })}
-                      />
+              <CardContent className="p-8 space-y-4">
+                {paths.map(p => (
+                  <div key={p.name} className={`flex justify-between p-6 border ${theme.border} rounded-2xl bg-black/10 items-center hover:bg-black/20 hover:border-[#58a6ff]/40 transition-all shadow-sm`}>
+                    <div className="flex flex-col gap-1">
+                      <span className={`font-black text-xl tracking-tighter ${theme.text}`}>{p.name}</span>
+                      <span className="text-[11px] font-mono text-[#768390] bg-[#22272e] px-2 py-0.5 rounded border border-[#444c56]/30 self-start">{p.source}</span>
                     </div>
-                    {config.api && (
-                      <div className="space-y-2 ml-4">
-                        <Label htmlFor="apiAddress">API Address</Label>
-                        <Input
-                          id="apiAddress"
-                          value={config.apiAddress}
-                          onChange={(e) => setConfig({ ...config, apiAddress: e.target.value })}
-                        />
+                    <div className="flex items-center gap-12">
+                      <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-[#768390]">
+                        <div className="flex flex-col items-center"><span className="text-[8px] opacity-40">ON-DEMAND</span><span className={p.sourceOnDemand ? 'text-emerald-500' : ''}>{String(p.sourceOnDemand)}</span></div>
+                        <div className="flex flex-col items-center"><span className="text-[8px] opacity-40">RECORDING</span><span className={p.record ? 'text-red-500' : ''}>{String(p.record)}</span></div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Metrics</Label>
-                        <p className="text-sm text-muted-foreground">Prometheus metrics</p>
-                      </div>
-                      <Switch
-                        checked={config.metrics}
-                        onCheckedChange={(checked) => setConfig({ ...config, metrics: checked })}
-                      />
+                      <Button size="icon" variant="ghost" className="text-red-500/40 hover:text-red-500 hover:bg-red-500/10 h-12 w-12 rounded-xl" onClick={() => api.deletePath(p.name).then(fetchPaths)}><Trash2 size={24} /></Button>
                     </div>
-                    {config.metrics && (
-                      <div className="space-y-2 ml-4">
-                        <Label htmlFor="metricsAddress">Metrics Address</Label>
-                        <Input
-                          id="metricsAddress"
-                          value={config.metricsAddress}
-                          onChange={(e) => setConfig({ ...config, metricsAddress: e.target.value })}
-                        />
-                      </div>
-                    )}
                   </div>
-                </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="paths" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Stream Paths</CardTitle>
-                    <CardDescription>Configure streaming paths and sources</CardDescription>
-                  </div>
-                  <Dialog open={isAddPathDialogOpen} onOpenChange={setIsAddPathDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Path
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Add New Path</DialogTitle>
-                        <DialogDescription>Configure a new streaming path in MediaMTX</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="pathName">Path Name *</Label>
-                          <Input
-                            id="pathName"
-                            placeholder="e.g., cam1, camera1"
-                            value={newPath.name}
-                            onChange={(e) => setNewPath({ ...newPath, name: e.target.value })}
-                          />
-                          <p className="text-xs text-muted-foreground">Unique identifier for this path</p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="source">Source URL *</Label>
-                          <Input
-                            id="source"
-                            placeholder="rtsp://admin:password@192.168.50.50"
-                            value={newPath.source}
-                            onChange={(e) => setNewPath({ ...newPath, source: e.target.value })}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            RTSP, RTMP, or HLS URL. Example: rtsp://admin:Admin1234@192.168.50.50
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="sourceFingerprint">Source Fingerprint (Optional)</Label>
-                          <Input
-                            id="sourceFingerprint"
-                            placeholder="SHA-256 fingerprint"
-                            value={newPath.sourceFingerprint}
-                            onChange={(e) => setNewPath({ ...newPath, sourceFingerprint: e.target.value })}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Optional SHA-256 fingerprint for RTSPS sources
-                          </p>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={newPath.sourceOnDemand}
-                            onCheckedChange={(checked) => setNewPath({ ...newPath, sourceOnDemand: checked })}
-                          />
-                          <Label>Source On Demand</Label>
-                        </div>
-                        <p className="text-xs text-muted-foreground ml-6">
-                          Start source only when requested by a client
-                        </p>
-
-                        <Separator />
-
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={newPath.record}
-                            onCheckedChange={(checked) => setNewPath({ ...newPath, record: checked })}
-                          />
-                          <Label>Enable Recording</Label>
-                        </div>
-
-                        {newPath.record && (
-                          <>
-                            <div className="space-y-2">
-                              <Label htmlFor="recordPath">Recording Path</Label>
-                              <Input
-                                id="recordPath"
-                                value={newPath.recordPath}
-                                onChange={(e) => setNewPath({ ...newPath, recordPath: e.target.value })}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Variables: %path, %Y %m %d (date), %H %M %S (time)
-                              </p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="recordFormat">Format</Label>
-                                <Select
-                                  value={newPath.recordFormat}
-                                  onValueChange={(value) => setNewPath({ ...newPath, recordFormat: value })}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="fmp4">Fragmented MP4</SelectItem>
-                                    <SelectItem value="mpegts">MPEG-TS</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label htmlFor="recordPartDuration">Part Duration</Label>
-                                <Input
-                                  id="recordPartDuration"
-                                  value={newPath.recordPartDuration}
-                                  onChange={(e) => setNewPath({ ...newPath, recordPartDuration: e.target.value })}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="recordSegmentDuration">Segment Duration</Label>
-                                <Input
-                                  id="recordSegmentDuration"
-                                  value={newPath.recordSegmentDuration}
-                                  onChange={(e) => setNewPath({ ...newPath, recordSegmentDuration: e.target.value })}
-                                />
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label htmlFor="recordDeleteAfter">Delete After</Label>
-                                <Input
-                                  id="recordDeleteAfter"
-                                  value={newPath.recordDeleteAfter}
-                                  onChange={(e) => setNewPath({ ...newPath, recordDeleteAfter: e.target.value })}
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        <Separator />
-
-                        <div className="space-y-2">
-                          <Label htmlFor="maxReaders">Max Readers (0 = unlimited)</Label>
-                          <Input
-                            id="maxReaders"
-                            type="number"
-                            value={newPath.maxReaders}
-                            onChange={(e) =>
-                              setNewPath({ ...newPath, maxReaders: Number.parseInt(e.target.value) || 0 })
-                            }
-                          />
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={newPath.overridePublisher}
-                            onCheckedChange={(checked) => setNewPath({ ...newPath, overridePublisher: checked })}
-                          />
-                          <Label>Override Publisher</Label>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAddPathDialogOpen(false)} disabled={isSubmitting}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAddPath} disabled={isSubmitting}>
-                          {isSubmitting ? "Adding..." : "Add Path"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {isLoadingPaths ? (
-                    <div className="text-center py-8">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-2"></div>
-                      <p className="text-sm text-gray-600">Loading paths...</p>
-                    </div>
-                  ) : paths.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <VideoIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>No paths configured</p>
-                      <Button className="mt-4" onClick={() => setIsAddPathDialogOpen(true)}>
-                        Add Your First Path
-                      </Button>
-                    </div>
-                  ) : (
-                    paths.map((path) => {
-                      const status = getPathStatus(path.name)
-                      return (
-                        <div key={path.name} className="border rounded-lg overflow-hidden">
-                          <div className="flex items-center justify-between p-4">
-                            <div className="flex items-center space-x-4 flex-1">
-                              <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
-                                <VideoIcon className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-medium">{path.name}</h3>
-                                  {status.isLive && (
-                                    <Badge variant="default" className="bg-red-500">
-                                      <div className="w-2 h-2 bg-white rounded-full animate-pulse mr-1" />
-                                      LIVE
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-500">{path.source}</p>
-                                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                                  <span>{status.readers} viewers</span>
-                                  {status.isLive && (
-                                    <>
-                                      <span>↓ {(status.bytesReceived / 1024 / 1024).toFixed(2)} MB</span>
-                                      <span>↑ {(status.bytesSent / 1024 / 1024).toFixed(2)} MB</span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  setSelectedStreamPath(selectedStreamPath === path.name ? null : path.name)
-                                }
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEditPath(path)}>
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => confirmDelete(path.name)}>
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </div>
-                          {selectedStreamPath === path.name && status.isLive && (
-                            <div className="px-4 pb-4">
-                              <StreamPlayer pathName={path.name} />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="auth" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Authentication Method</CardTitle>
-                <CardDescription>Configure how users authenticate with the server</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Authentication Method</Label>
+          {/* AUTH TAB */}
+          <TabsContent value="auth" className="space-y-8">
+            <Card className={`${theme.card} rounded-2xl overflow-hidden border-none shadow-xl`}>
+              <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>Global Access Strategy</CardTitle></CardHeader>
+              <CardContent className="p-8 pt-10">
+                <div className="space-y-3 max-w-lg">
+                  <Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Authentication Provider</Label>
                   <Select defaultValue="internal">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Internal (Configuration File)</SelectItem>
-                      <SelectItem value="http">HTTP (External URL)</SelectItem>
-                      <SelectItem value="jwt">JWT (Identity Server)</SelectItem>
-                    </SelectContent>
+                    <SelectTrigger className={`${theme.input} h-12 rounded-xl shadow-inner`}><SelectValue /></SelectTrigger>
+                    <SelectContent className={`${theme.card} border-[#444c56] text-[#f0f6fc]`}><SelectItem value="internal" className="font-bold">Internal Configuration Driver</SelectItem></SelectContent>
                   </Select>
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Internal Users</CardTitle>
-                    <CardDescription>Manage users stored in configuration</CardDescription>
-                  </div>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add User
-                  </Button>
-                </div>
+            
+            <Card className={`${theme.card} rounded-2xl shadow-2xl border-none overflow-hidden`}>
+              <CardHeader className={`flex justify-between items-center border-b ${theme.header} py-6 px-8`}>
+                <CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Identity Management</CardTitle>
+                <Button size="sm" variant="outline" className={`${theme.border} hover:bg-slate-700 rounded-xl px-6 h-10 font-bold`}><Plus size={16} className="mr-2" /> Add User</Button>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-medium">Default User (any)</h3>
-                      <Badge variant="secondary">Unprivileged</Badge>
+              <CardContent className="p-8 space-y-6">
+                {[
+                  { name: "Global Administrator", role: "ROOT / API ACCESS", user: "admin", perms: ["api", "metrics", "pprof", "admin"] },
+                  { name: "Default (any)", role: "PUBLISHER / READER", user: "any", perms: ["publish", "read"] }
+                ].map(u => (
+                  <div key={u.user} className={`p-8 border ${theme.border} rounded-3xl bg-black/10 shadow-inner`}>
+                    <div className="flex justify-between items-center mb-8">
+                      <div className="flex flex-col gap-1"><h3 className={`font-black text-2xl tracking-tighter uppercase ${theme.text}`}>{u.name}</h3><span className="text-[10px] text-[#768390] font-black uppercase tracking-[0.2em]">{u.role}</span></div>
+                      <Badge className="bg-[#58a6ff] px-4 py-1 tracking-widest text-[10px] font-black rounded-lg text-white">VERIFIED</Badge>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Username</Label>
-                        <Input value="any" readOnly />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Password</Label>
-                        <Input type="password" placeholder="No password required" readOnly />
-                      </div>
+                    <div className="grid grid-cols-2 gap-10">
+                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest ml-1">Login Username</Label><Input value={u.user} readOnly className={`${theme.input} h-12 rounded-xl font-bold bg-[#2d333b]/40 border-none shadow-inner`} /></div>
+                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest ml-1">Authentication Key</Label><Input type="password" value="******" readOnly className={`${theme.input} h-12 rounded-xl font-bold bg-[#2d333b]/40 border-none shadow-inner`} /></div>
                     </div>
-                    <div className="mt-4">
-                      <Label>Permissions</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge>publish</Badge>
-                        <Badge>read</Badge>
-                        <Badge>playback</Badge>
-                      </div>
+                    <div className="mt-8 pt-8 border-t border-[#444c56]/40">
+                      <Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest mb-4 block">Assigned Capability ACLs</Label>
+                      <div className="flex gap-3 mt-4">{u.perms.map(p => <Badge key={p} className="bg-slate-700/30 text-[#58a6ff] border border-[#58a6ff]/20 font-mono text-[11px] px-3 py-1 rounded-md">{p}</Badge>)}</div>
                     </div>
                   </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-medium">Administrator</h3>
-                      <Badge>Admin</Badge>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Username</Label>
-                        <Input value="admin" readOnly />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Password</Label>
-                        <Input type="password" value="adminpass" readOnly />
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <Label>Permissions</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge>api</Badge>
-                        <Badge>metrics</Badge>
-                        <Badge>pprof</Badge>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                ))}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="recording" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recording Settings</CardTitle>
-                <CardDescription>Configure stream recording options</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="recordFormat">Recording Format</Label>
-                      <Select defaultValue="fmp4">
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fmp4">Fragmented MP4</SelectItem>
-                          <SelectItem value="mpegts">MPEG-TS</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="recordPath">Recording Path</Label>
-                      <Input defaultValue="./recordings/%path/%Y-%m-%d_%H-%M-%S-%f" />
-                      <p className="text-xs text-muted-foreground">
-                        Variables: %path, %Y %m %d (date), %H %M %S (time)
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="segmentDuration">Segment Duration</Label>
-                      <Input defaultValue="1h" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="partDuration">Part Duration</Label>
-                      <Input defaultValue="1s" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="maxPartSize">Max Part Size</Label>
-                      <Input defaultValue="50M" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="deleteAfter">Delete After</Label>
-                      <Input defaultValue="1d" />
-                      <p className="text-xs text-muted-foreground">Set to 0s to disable automatic deletion</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Recording Status</CardTitle>
-                <CardDescription>Current recording sessions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-red-100 rounded-lg">
-                        <Play className="w-5 h-5 text-red-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium">camera1</h3>
-                        <p className="text-sm text-gray-500">Recording since 2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="default">Recording</Badge>
-                      <Button size="sm" variant="outline">
-                        Stop
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-lg">
-                        <Play className="w-5 h-5 text-gray-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium">stream2</h3>
-                        <p className="text-sm text-gray-500">No active recording</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant="secondary">Idle</Badge>
-                      <Button size="sm" variant="outline">
-                        Start
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="monitoring" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">CPU Usage</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">23%</div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: "23%" }}></div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Memory Usage</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">1.2GB</div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                    <div className="bg-green-600 h-2 rounded-full" style={{ width: "45%" }}></div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Network I/O</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">45MB/s</div>
-                  <p className="text-xs text-muted-foreground">↑ 25MB/s ↓ 20MB/s</p>
-                </CardContent>
-              </Card>
+          {/* MONITORING TAB */}
+          <TabsContent value="monitoring" className="space-y-8">
+            <div className="grid grid-cols-3 gap-8">
+              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Compute Utilization</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#58a6ff] tracking-tighter">23.4%</div><div className={`w-full bg-black/20 rounded-full h-2 mt-6 overflow-hidden border ${theme.border} shadow-inner`}><div className="bg-[#58a6ff] h-full rounded-full shadow-[0_0_15px_rgba(88,166,255,0.4)]" style={{ width: "23%" }}></div></div></CardContent></Card>
+              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Ingest Pulse</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#347d39] tracking-tighter">{livePaths.filter(p=>p.ready).length}</div><p className="text-[11px] mt-4 font-black uppercase text-[#768390] tracking-widest">Active publishers online</p></CardContent></Card>
+              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Network Outbound</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#cf222e] tracking-tighter">45.2 MB/s</div><p className="text-[11px] mt-4 font-black uppercase text-[#768390] tracking-widest">Readers: {livePaths.reduce((a,c)=>a+(c.readers?.length||0), 0)}</p></CardContent></Card>
             </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Server Logs</CardTitle>
-                <CardDescription>Recent server activity and events</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-64 w-full border rounded-lg p-4">
-                  <div className="space-y-2 text-sm font-mono">
-                    <div className="text-blue-600">[INFO] 2024-01-15 14:30:25 - Server started on :8554</div>
-                    <div className="text-green-600">[INFO] 2024-01-15 14:30:26 - RTSP server listening on :8554</div>
-                    <div className="text-green-600">[INFO] 2024-01-15 14:30:26 - HLS server listening on :8888</div>
-                    <div className="text-blue-600">
-                      [INFO] 2024-01-15 14:32:15 - New client connected: 192.168.1.100
-                    </div>
-                    <div className="text-blue-600">[INFO] 2024-01-15 14:32:16 - Stream 'camera1' started</div>
-                    <div className="text-yellow-600">[WARN] 2024-01-15 14:35:22 - High CPU usage detected: 85%</div>
-                    <div className="text-blue-600">
-                      [INFO] 2024-01-15 14:40:10 - Recording started for path 'camera1'
-                    </div>
-                    <div className="text-green-600">[INFO] 2024-01-15 14:45:33 - WebRTC connection established</div>
-                  </div>
+            <Card className={`${theme.card} border-none rounded-3xl overflow-hidden shadow-2xl`}>
+              <CardHeader className={`px-10 py-6 border-b ${theme.header} bg-black/10`}><CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-4">Node Telemetry Broadcast Log <Badge className="bg-[#347d39] text-[10px] px-3 animate-pulse border-none text-white">LIVE FEED</Badge></CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <ScrollArea className={`h-96 w-full p-10 text-[12px] font-mono leading-relaxed bg-[#1c2128] shadow-inner`}>
+                  <div className="text-[#58a6ff] font-bold">[HANDSHAKE] UI protocol linked to master node at {serverIP}</div>
+                  <div className="text-[#768390] mt-1 font-bold">[VERSION] Running MediaMTX Matrix Pro v3.4.0-Stable</div>
+                  <Separator className="my-6 opacity-10" />
+                  {livePaths.map(p => <div key={p.name} className="text-[#347d39] mt-2 font-bold">[INGEST] Stream route '{p.name}' verified. Transmitting to {getStatus(p.name).readers} readers.</div>)}
+                  <div className="text-white/5 animate-pulse mt-8 select-none tracking-widest">_ scanning heartbeat...</div>
                 </ScrollArea>
-                <div className="flex justify-between items-center mt-4">
-                  <div className="flex items-center space-x-2">
-                    <Button size="sm" variant="outline">
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Refresh
-                    </Button>
-                    <Select defaultValue="info">
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="error">Error</SelectItem>
-                        <SelectItem value="warn">Warning</SelectItem>
-                        <SelectItem value="info">Info</SelectItem>
-                        <SelectItem value="debug">Debug</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button size="sm" variant="outline">
-                    Clear Logs
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Path: {editingPath?.name}</DialogTitle>
-            <DialogDescription>Update the configuration for this streaming path</DialogDescription>
-          </DialogHeader>
-          {editingPath && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Path Name</Label>
-                <Input value={editingPath.name} disabled />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="editSource">Source URL</Label>
-                <Input
-                  id="editSource"
-                  value={editingPath.source}
-                  onChange={(e) => setEditingPath({ ...editingPath, source: e.target.value })}
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={editingPath.sourceOnDemand}
-                  onCheckedChange={(checked) => setEditingPath({ ...editingPath, sourceOnDemand: checked })}
-                />
-                <Label>Source On Demand</Label>
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={editingPath.record}
-                  onCheckedChange={(checked) => setEditingPath({ ...editingPath, record: checked })}
-                />
-                <Label>Enable Recording</Label>
-              </div>
-
-              {editingPath.record && (
-                <div className="space-y-4 ml-6">
-                  <div className="space-y-2">
-                    <Label>Recording Path</Label>
-                    <Input
-                      value={editingPath.recordPath || ""}
-                      onChange={(e) => setEditingPath({ ...editingPath, recordPath: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Format</Label>
-                      <Select
-                        value={editingPath.recordFormat}
-                        onValueChange={(value) => setEditingPath({ ...editingPath, recordFormat: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="fmp4">Fragmented MP4</SelectItem>
-                          <SelectItem value="mpegts">MPEG-TS</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Segment Duration</Label>
-                      <Input
-                        value={editingPath.recordSegmentDuration || ""}
-                        onChange={(e) => setEditingPath({ ...editingPath, recordSegmentDuration: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdatePath} disabled={isSubmitting}>
-              {isSubmitting ? "Updating..." : "Update Path"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Path</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the path "{pathToDelete}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeletePath} disabled={isSubmitting}>
-              {isSubmitting ? "Deleting..." : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* PREVIEW MODAL */}
+      {selectedStream && (
+        <div className={`fixed bottom-10 right-10 w-[550px] shadow-[0_40px_100px_rgba(0,0,0,0.9)] border-2 border-[#58a6ff]/50 rounded-[40px] overflow-hidden bg-black z-50 animate-in zoom-in-95 duration-500`}>
+          <div className={`px-8 py-5 border-b ${theme.border} text-[11px] font-black tracking-[0.2em] flex justify-between items-center text-[#58a6ff] uppercase ${isDark ? 'bg-[#373e47]' : 'bg-white'}`}>
+            <div className="flex items-center gap-3"><div className="w-2 h-2 bg-[#58a6ff] rounded-full animate-ping" /><span>PREVIEW: {selectedStream}</span></div>
+            <button className="bg-black/20 px-4 py-2 rounded-2xl border border-[#444c56] hover:bg-[#cf222e] hover:border-transparent hover:text-white transition-all text-[#f0f6fc]" onClick={() => setSelectedStream(null)}>EXIT MONITOR [X]</button>
+          </div>
+          <div className="p-1 bg-[#1c2128]"><StreamPlayer pathName={selectedStream} /></div>
+          <div className={`p-6 flex justify-center border-t ${theme.border} ${isDark ? 'bg-[#373e47]' : 'bg-slate-50'}`}>
+            <Badge variant="outline" className="text-[#347d39] border-[#347d39]/30 font-mono text-[11px] uppercase tracking-widest px-4 py-1">H.264 PASSTHROUGH / ZERO-COPY LINK ACTIVE</Badge>
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }
 
 export default function Page() {
@@ -1254,5 +497,5 @@ export default function Page() {
     <ProtectedRoute>
       <MediaMTXDashboard />
     </ProtectedRoute>
-  )
+  );
 }
