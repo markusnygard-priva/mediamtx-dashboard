@@ -1,33 +1,41 @@
+version: '3.8'
+
 services:
+  # --- NEXT.JS DASHBOARD (DEV MODE) ---
   mediamtx-dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # This "tunnels" your Windows folder into the container
+    container_name: mediamtx-dashboard-dev
+    image: node:20-slim
+    working_dir: /app
     volumes:
       - .:/app
-      - /app/node_modules    # <--- NO DOT. This is the magic line.
-      - /app/.next           # <--- NO DOT.
-    # Runs the Next.js development server with Hot Reloading
-    command: npm run dev
+      # This anonymous volume prevents Windows node_modules from 
+      # overwriting the Linux ones we install inside the container
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_MEDIAMTX_API_URL=http://localhost:9997
+      - NODE_ENV=development
+    # This command installs the tools, fixes links, and starts the dev server
+    command: >
+      sh -c "npm install -g pnpm && pnpm install && pnpm dev"
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_MEDIAMTX_API_URL=http://192.168.8.23:9997
     networks:
       - mediamtx-net
+    restart: unless-stopped
 
-  nginx_mediamtx_proxy:
-    image: nginx:latest
+  # --- NGINX PROXY (DEV MODE) ---
+  mediamtx-proxy:
+    container_name: mediamtx-proxy-dev
+    image: nginx:alpine
     ports:
       - "80:80"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - mediamtx-dashboard
     networks:
       - mediamtx-net
+    restart: unless-stopped
 
 networks:
   mediamtx-net:

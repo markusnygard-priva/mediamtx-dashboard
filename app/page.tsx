@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Server, Radio, Eye, RefreshCw, Trash2, Monitor, LogOut, 
-  VideoIcon, Square, Shield, Activity, Video, Play, Plus, Globe, Moon, Sun
+  VideoIcon, Square, Shield, Activity, Video, Play, Plus, Globe, Moon, Sun, Clock, Database, Lock, Settings, LayoutGrid, Sparkles
 } from "lucide-react";
 
 import { ProtectedRoute } from "@/components/protected-route";
@@ -29,7 +29,6 @@ import { StreamPlayer } from "@/components/stream-player";
 import * as api from "@/lib/mediamtx-api";
 import type { PathConfig, Path as LivePath } from "@/lib/mediamtx-api";
 
-// --- THEME TOKENS (GUNMETAL & SILVER) ---
 const themes = {
   light: {
     bg: "bg-[#f0f2f5]", 
@@ -43,10 +42,10 @@ const themes = {
     codeBg: "bg-[#f6f8fa] text-[#0969da]",
   },
   dark: {
-    bg: "bg-[#2d333b]", // Gunmetal Slate
+    bg: "bg-[#2d333b]", 
     header: "bg-[#22272e] border-[#444c56]",
-    card: "bg-[#373e47] border-[#444c56]", // Medium Charcoal
-    text: "text-[#f0f6fc]", // Silver
+    card: "bg-[#373e47] border-[#444c56]", 
+    text: "text-[#f0f6fc]", 
     textMuted: "text-[#adbac7]",
     border: "border-[#444c56]",
     input: "bg-[#22272e] border-[#444c56] text-[#f0f6fc]",
@@ -55,7 +54,8 @@ const themes = {
   }
 };
 
-// --- SUB-COMPONENT: FrigateDropdown ---
+// --- HELPER COMPONENTS ---
+
 function FrigateDropdown({ sourceStreamName, onSuccess, theme }: { sourceStreamName: string, onSuccess?: () => void, theme: any }) {
   const [loading, setLoading] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
@@ -64,7 +64,7 @@ function FrigateDropdown({ sourceStreamName, onSuccess, theme }: { sourceStreamN
 
   const handleConfirmLink = async () => {
     setLoading(true);
-    const sourceUrl = `rtsp://127.0.0.1:8556/${sourceStreamName}`;
+    const sourceUrl = `rtsp://127.0.0.1:8554/${sourceStreamName}`;
     try {
       await api.updatePath(pendingSlot, sourceUrl);
       setShowDialog(false);
@@ -89,7 +89,7 @@ function FrigateDropdown({ sourceStreamName, onSuccess, theme }: { sourceStreamN
         </SelectContent>
       </Select>
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className={`${theme.card} ${theme.text} border-none`}>
+        <DialogContent className={`${theme.card} ${theme.text} border-none shadow-2xl`}>
           <DialogHeader><DialogTitle className={theme.text}>Confirm Bridge Routing</DialogTitle></DialogHeader>
           <div className="py-6 text-lg">Route <b>{sourceStreamName}</b> into <b>{pendingSlot}</b>?</div>
           <DialogFooter>
@@ -102,7 +102,6 @@ function FrigateDropdown({ sourceStreamName, onSuccess, theme }: { sourceStreamN
   );
 }
 
-// --- HELPER: Protocol URL Buttons ---
 function StreamUrlButton({ protocol, pathName, ip, theme }: { protocol: string, pathName: string, ip: string, theme: any }) {
   const [open, setOpen] = useState(false);
   let url = "";
@@ -123,6 +122,7 @@ function StreamUrlButton({ protocol, pathName, ip, theme }: { protocol: string, 
 }
 
 // --- MAIN DASHBOARD ---
+
 function MediaMTXDashboard() {
   const router = useRouter();
   const [isDark, setIsDark] = useState(true);
@@ -186,11 +186,22 @@ function MediaMTXDashboard() {
     } catch (err: any) { alert("Create Error: " + err.message); }
   };
 
-  const sortedPaths = [...paths].sort((a, b) => {
+  // --- SORTING LOGIC FOR OVERVIEW (Activity Based) ---
+  const sortedOverviewPaths = [...paths].sort((a, b) => {
     const statA = getStatus(a.name); const statB = getStatus(b.name);
     if (statA.isLive && !statB.isLive) return -1;
     if (!statA.isLive && statB.isLive) return 1;
     return (lastActiveMap[b.name] || 0) - (lastActiveMap[a.name] || 0) || a.name.localeCompare(b.name);
+  });
+
+  // --- SORTING LOGIC FOR PATHS TAB (Oldest Date Suffix First) ---
+  const sortedPathsTab = [...paths].sort((a, b) => {
+    const dateA = a.name.split('_').pop() || "";
+    const dateB = b.name.split('_').pop() || "";
+    if (/^\d{8}$/.test(dateA) && /^\d{8}$/.test(dateB)) {
+      return dateA.localeCompare(dateB); // Oldest string (earliest date) first
+    }
+    return a.name.localeCompare(b.name);
   });
 
   return (
@@ -226,12 +237,21 @@ function MediaMTXDashboard() {
             ))}
           </TabsList>
 
-          {/* OVERVIEW TAB */}
+          {/* TAB 1: OVERVIEW */}
           <TabsContent value="overview">
             <Card className={`${theme.card} shadow-2xl rounded-2xl overflow-hidden border-none`}>
               <CardHeader className={`flex flex-row items-center justify-between border-b ${theme.header} py-6 px-8`}>
                 <CardTitle className={`text-sm font-black uppercase tracking-widest ${theme.text}`}>Active Stream Matrix</CardTitle>
                 <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff] hover:text-white font-bold h-10 px-6 transition-all"
+                    onClick={() => window.open(`http://${serverIP}:7000/`, "_blank")}
+                  >
+                    <LayoutGrid size={18} className="mr-2" /> Frigate Cameras
+                  </Button>
+
                    <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
                     <DialogTrigger asChild><Button size="sm" className="bg-[#238636] hover:bg-[#2ea043] text-white border-none shadow-lg px-6 font-bold h-10"><Plus size={18} className="mr-2" /> Quick Add</Button></DialogTrigger>
                     <DialogContent className={`${theme.card} ${theme.text}`}>
@@ -247,7 +267,7 @@ function MediaMTXDashboard() {
                 </div>
               </CardHeader>
               <CardContent className="p-6 space-y-3">
-                {sortedPaths.map(p => {
+                {sortedOverviewPaths.map(p => {
                   const s = getStatus(p.name);
                   const isFrigate = p.name.startsWith("frigate_");
                   let accentClass = s.isLive ? (isFrigate ? "border-l-4 border-l-[#58a6ff] bg-[#58a6ff]/10" : "border-l-4 border-l-[#cf222e] bg-[#cf222e]/10") : "bg-[#2d333b]/40";
@@ -260,7 +280,32 @@ function MediaMTXDashboard() {
                         </div>
                         <div>
                           <div className={`font-black text-lg flex items-center gap-3 tracking-tight ${theme.text}`}>
-                            {p.name} {s.isLive && <Badge className={`${isFrigate ? 'bg-[#1f6feb]' : 'bg-[#cf222e]'} text-white`}>LIVE</Badge>}
+                            {p.name} 
+                            {s.isLive && <Badge className={`${isFrigate ? 'bg-[#1f6feb]' : 'bg-[#cf222e]'} text-white`}>LIVE</Badge>}
+                            
+                            {/* --- EXPIRY LOGIC --- */}
+                            {(() => {
+                              const parts = p.name.split('_');
+                              const dateStr = parts[parts.length - 1];
+                              if (!/^\d{8}$/.test(dateStr)) return null;
+
+                              const year = parseInt(dateStr.substring(0, 4));
+                              const month = parseInt(dateStr.substring(4, 6)) - 1;
+                              const day = parseInt(dateStr.substring(6, 8));
+                              
+                              const created = new Date(year, month, day);
+                              const diffDays = Math.floor((new Date().getTime() - created.getTime()) / (1000 * 3600 * 24));
+                              const daysLeft = 8 - diffDays;
+
+                              if (daysLeft <= 5) {
+                                return (
+                                  <Badge className="ml-2 bg-orange-600 text-white animate-pulse border-none font-black uppercase tracking-wider px-3 shadow-lg shadow-orange-900/20">
+                                    {daysLeft <= 0 ? "WILL BE DELETED SOON" : `WILL BE DELETED IN ${daysLeft} DAYS`}
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                           <div className={`text-[11px] font-mono uppercase tracking-tighter ${theme.textMuted} mt-1`}>{p.source || "awaiting publisher ingest"}</div>
                         </div>
@@ -285,7 +330,7 @@ function MediaMTXDashboard() {
             </Card>
           </TabsContent>
 
-          {/* RECORDING TAB */}
+          {/* TAB 2: RECORDING (FRIGATE BRIDGE) */}
           <TabsContent value="recording">
              <Card className={`${theme.card} rounded-2xl shadow-2xl border-none`}>
                <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Active Frigate Bridge Sessions</CardTitle></CardHeader>
@@ -311,171 +356,155 @@ function MediaMTXDashboard() {
              </CardContent></Card>
           </TabsContent>
 
-          {/* SERVER TAB */}
-          <TabsContent value="server" className="space-y-8">
-            <Card className={`${theme.card} border-[#58a6ff]/30 p-6 rounded-2xl`}>
-              <CardHeader className="p-0 pb-6"><CardTitle className={`text-lg font-black ${theme.text} flex items-center gap-3`}><Globe className="text-[#58a6ff]" /> Node Setup</CardTitle></CardHeader>
-              <CardContent className="p-0 flex gap-6 items-end">
-                <div className="flex-1 space-y-3">
-                  <Label className="text-xs uppercase text-[#768390] font-black tracking-widest ml-1">MediaMTX IP Address</Label>
-                  <Input value={serverIP} onChange={e => setServerIP(e.target.value)} className={`${theme.input} h-14 text-xl font-mono px-5 rounded-xl border-[#444c56] focus:border-[#58a6ff] shadow-inner`} />
-                </div>
-                <Button className="bg-[#1f6feb] hover:bg-[#388bfd] text-white font-black h-14 px-12 rounded-xl text-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95">UPDATE NODE</Button>
-              </CardContent>
-            </Card>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card className={`${theme.card} rounded-2xl shadow-xl`}>
-                <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>System Preferences</CardTitle></CardHeader>
-                <CardContent className="space-y-8 p-8">
-                  <div className="space-y-3">
-                    <Label className="text-[#768390] text-[11px] font-bold uppercase tracking-wider ml-1">Logging Verbosity</Label>
-                    <Select value={config.logLevel} onValueChange={v => setConfig({...config, logLevel: v})}>
-                      <SelectTrigger className={`${theme.input} h-12 rounded-xl shadow-inner`}><SelectValue /></SelectTrigger>
-                      <SelectContent className={`${theme.card} border-[#444c56] text-[#f0f6fc]`}>
-                        <SelectItem value="info" className="font-bold">INFO (Standard)</SelectItem>
-                        <SelectItem value="error" className="font-bold">ERROR Only</SelectItem>
-                        <SelectItem value="debug" className="font-bold">DEBUG (Verbose)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-3"><Label className="text-[#768390] text-[10px] font-bold uppercase ml-1">Read Timeout</Label><Input defaultValue="10s" className={`${theme.input} h-12 rounded-xl shadow-inner`} /></div>
-                    <div className="space-y-3"><Label className="text-[#768390] text-[10px] font-bold uppercase ml-1">Write Timeout</Label><Input defaultValue="10s" className={`${theme.input} h-12 rounded-xl shadow-inner`} /></div>
-                  </div>
+          {/* TAB 3: SERVER ENGINE */}
+          <TabsContent value="server">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className={`${theme.card} border-none shadow-xl`}>
+                <CardHeader><CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Settings size={16} /> Protocol Engine</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  {Object.entries(config).map(([key, val]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <Label className="capitalize font-bold text-md tracking-tight">{key.replace(/([A-Z])/g, ' $1')}</Label>
+                      <Switch checked={!!val} className="data-[state=checked]:bg-[#238636]" />
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
-
-              <Card className={`${theme.card} rounded-2xl shadow-xl`}>
-                <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>Active Listeners</CardTitle></CardHeader>
-                <CardContent className="space-y-4 p-8">
-                   {[
-                     { label: "RTSP Server", port: "8554", key: "rtsp" },
-                     { label: "RTMP Server", port: "1935", key: "rtmp" },
-                     { label: "HLS Server", port: "8888", key: "hls" }
-                   ].map(proto => (
-                     <div key={proto.key} className="flex justify-between items-center p-5 bg-black/20 rounded-2xl border border-[#444c56]/40 shadow-inner">
-                       <div className="space-y-0.5">
-                         <Label className={`font-bold text-lg ${theme.text}`}>{proto.label}</Label>
-                         <p className="text-[10px] text-[#768390] font-black uppercase tracking-tighter">LISTENING ON PORT {proto.port}</p>
-                       </div>
-                       <Switch checked={(config as any)[proto.key]} onCheckedChange={v => setConfig({...config, [proto.key]: v})} className="data-[state=checked]:bg-[#238636]" />
-                     </div>
-                   ))}
+              <Card className={`${theme.card} border-none shadow-xl`}>
+                <CardHeader><CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Activity size={16} /> Hardware Metrics</CardTitle></CardHeader>
+                <CardContent className="space-y-8 py-10">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-black uppercase"><span>CPU Load</span><span className="text-green-500">14%</span></div>
+                    <div className="w-full bg-[#22272e] h-2 rounded-full overflow-hidden shadow-inner"><div className="bg-[#238636] h-full w-[14%]" /></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-black uppercase"><span>Memory Usage</span><span className="text-[#58a6ff]">1.2GB / 4GB</span></div>
+                    <div className="w-full bg-[#22272e] h-2 rounded-full overflow-hidden shadow-inner"><div className="bg-[#58a6ff] h-full w-[30%]" /></div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-black uppercase"><span>Storage</span><span className="text-orange-500">82GB Free</span></div>
+                    <div className="w-full bg-[#22272e] h-2 rounded-full overflow-hidden shadow-inner"><div className="bg-orange-500 h-full w-[65%]" /></div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
-          {/* PATHS TAB */}
+          {/* TAB 4: PATH CONFIGURATIONS */}
           <TabsContent value="paths">
-            <Card className={`${theme.card} rounded-2xl shadow-2xl overflow-hidden border-none`}>
-              <CardHeader className={`flex flex-row items-center justify-between border-b ${theme.header} py-6 px-8`}>
-                <div><CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Stream Path Templates</CardTitle><CardDescription className="text-[#768390] mt-1">Define static camera sources and publishing permissions.</CardDescription></div>
-                <Dialog open={isAddPathDialogOpen} onOpenChange={setIsAddPathDialogOpen}>
-                  <DialogTrigger asChild><Button className="bg-[#347d39] hover:bg-[#46954a] text-white font-black px-8 h-12 rounded-xl shadow-lg border-none"><Plus size={20} className="mr-2" /> CREATE TEMPLATE</Button></DialogTrigger>
-                  <DialogContent className={`${theme.card} ${theme.text} max-w-2xl border-[#444c56] p-0 rounded-3xl overflow-hidden`}>
-                    <div className="p-8 bg-[#2d333b]"><DialogHeader><DialogTitle className="text-[#f0f6fc] text-2xl font-black uppercase tracking-tighter">New Path Configuration</DialogTitle></DialogHeader></div>
-                    <div className="p-8 space-y-8 bg-[#2d333b]/30">
-                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Unique Path ID / URL Component</Label><Input className={`${theme.input} h-12 text-lg font-bold rounded-xl`} value={newPath.name} onChange={e => setNewPath({...newPath, name: e.target.value})} /></div>
-                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Stream Source (e.g., publisher or rtsp://...)</Label><Input className={`${theme.input} h-12 font-mono rounded-xl text-[#58a6ff]`} value={newPath.source} onChange={e => setNewPath({...newPath, source: e.target.value})} /></div>
-                      <div className="space-y-3"><Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Source Fingerprint (Optional)</Label><Input className={`${theme.input} h-12 font-mono rounded-xl opacity-60`} value={newPath.sourceFingerprint} onChange={e => setNewPath({...newPath, sourceFingerprint: e.target.value})} /></div>
-                      <div className="flex items-center justify-between p-5 bg-[#2d333b] rounded-2xl border border-[#444c56]/60 shadow-inner"><Label className="text-[#f0f6fc] font-bold">Enable Source On Demand</Label><Switch checked={newPath.sourceOnDemand} onCheckedChange={v => setNewPath({...newPath, sourceOnDemand: v})} className="data-[state=checked]:bg-[#347d39]" /></div>
-                    </div>
-                    <div className="p-6 bg-[#2d333b] border-t border-[#444c56] flex justify-end">
-                      <Button onClick={handleCreatePath} className="bg-[#347d39] hover:bg-[#46954a] text-white px-10 h-14 font-black rounded-2xl w-full text-xl shadow-xl">SAVE TEMPLATE</Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+            <Card className={`${theme.card} border-none shadow-xl overflow-hidden`}>
+              <CardHeader className="flex flex-row items-center justify-between border-b border-[#444c56]/30 pb-6 px-8">
+                <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                  <Database size={16} className="text-[#58a6ff]" /> Global Path Catalog (Oldest First)
+                </CardTitle>
+                <Button size="sm" onClick={() => setIsAddPathDialogOpen(true)} className="bg-[#58a6ff] hover:bg-[#1f6feb] text-white font-bold h-10 px-6">
+                  <Plus size={16} className="mr-2" /> New Global Path
+                </Button>
               </CardHeader>
-              <CardContent className="p-8 space-y-4">
-                {paths.map(p => (
-                  <div key={p.name} className={`flex justify-between p-6 border ${theme.border} rounded-2xl bg-black/10 items-center hover:bg-black/20 hover:border-[#58a6ff]/40 transition-all shadow-sm`}>
-                    <div className="flex flex-col gap-1">
-                      <span className={`font-black text-xl tracking-tighter ${theme.text}`}>{p.name}</span>
-                      <span className="text-[11px] font-mono text-[#768390] bg-[#22272e] px-2 py-0.5 rounded border border-[#444c56]/30 self-start">{p.source}</span>
-                    </div>
-                    <div className="flex items-center gap-12">
-                      <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-[#768390]">
-                        <div className="flex flex-col items-center"><span className="text-[8px] opacity-40">ON-DEMAND</span><span className={p.sourceOnDemand ? 'text-emerald-500' : ''}>{String(p.sourceOnDemand)}</span></div>
-                        <div className="flex flex-col items-center"><span className="text-[8px] opacity-40">RECORDING</span><span className={p.record ? 'text-red-500' : ''}>{String(p.record)}</span></div>
-                      </div>
-                      <Button size="icon" variant="ghost" className="text-red-500/40 hover:text-red-500 hover:bg-red-500/10 h-12 w-12 rounded-xl" onClick={() => api.deletePath(p.name).then(fetchPaths)}><Trash2 size={24} /></Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* AUTH TAB */}
-          <TabsContent value="auth" className="space-y-8">
-            <Card className={`${theme.card} rounded-2xl overflow-hidden border-none shadow-xl`}>
-              <CardHeader className={`border-b ${theme.header} py-6 px-8`}><CardTitle className={`text-xs font-black uppercase tracking-widest ${theme.text}`}>Global Access Strategy</CardTitle></CardHeader>
-              <CardContent className="p-8 pt-10">
-                <div className="space-y-3 max-w-lg">
-                  <Label className="text-[#768390] font-bold uppercase text-[10px] ml-1">Authentication Provider</Label>
-                  <Select defaultValue="internal">
-                    <SelectTrigger className={`${theme.input} h-12 rounded-xl shadow-inner`}><SelectValue /></SelectTrigger>
-                    <SelectContent className={`${theme.card} border-[#444c56] text-[#f0f6fc]`}><SelectItem value="internal" className="font-bold">Internal Configuration Driver</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className={`${theme.card} rounded-2xl shadow-2xl border-none overflow-hidden`}>
-              <CardHeader className={`flex justify-between items-center border-b ${theme.header} py-6 px-8`}>
-                <CardTitle className={`text-md font-black uppercase tracking-widest ${theme.text}`}>Identity Management</CardTitle>
-                <Button size="sm" variant="outline" className={`${theme.border} hover:bg-slate-700 rounded-xl px-6 h-10 font-bold`}><Plus size={16} className="mr-2" /> Add User</Button>
-              </CardHeader>
-              <CardContent className="p-8 space-y-6">
-                {[
-                  { name: "Global Administrator", role: "ROOT / API ACCESS", user: "admin", perms: ["api", "metrics", "pprof", "admin"] },
-                  { name: "Default (any)", role: "PUBLISHER / READER", user: "any", perms: ["publish", "read"] }
-                ].map(u => (
-                  <div key={u.user} className={`p-8 border ${theme.border} rounded-3xl bg-black/10 shadow-inner`}>
-                    <div className="flex justify-between items-center mb-8">
-                      <div className="flex flex-col gap-1"><h3 className={`font-black text-2xl tracking-tighter uppercase ${theme.text}`}>{u.name}</h3><span className="text-[10px] text-[#768390] font-black uppercase tracking-[0.2em]">{u.role}</span></div>
-                      <Badge className="bg-[#58a6ff] px-4 py-1 tracking-widest text-[10px] font-black rounded-lg text-white">VERIFIED</Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-10">
-                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest ml-1">Login Username</Label><Input value={u.user} readOnly className={`${theme.input} h-12 rounded-xl font-bold bg-[#2d333b]/40 border-none shadow-inner`} /></div>
-                      <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest ml-1">Authentication Key</Label><Input type="password" value="******" readOnly className={`${theme.input} h-12 rounded-xl font-bold bg-[#2d333b]/40 border-none shadow-inner`} /></div>
-                    </div>
-                    <div className="mt-8 pt-8 border-t border-[#444c56]/40">
-                      <Label className="text-[10px] font-black uppercase text-[#768390] tracking-widest mb-4 block">Assigned Capability ACLs</Label>
-                      <div className="flex gap-3 mt-4">{u.perms.map(p => <Badge key={p} className="bg-slate-700/30 text-[#58a6ff] border border-[#58a6ff]/20 font-mono text-[11px] px-3 py-1 rounded-md">{p}</Badge>)}</div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* MONITORING TAB */}
-          <TabsContent value="monitoring" className="space-y-8">
-            <div className="grid grid-cols-3 gap-8">
-              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Compute Utilization</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#58a6ff] tracking-tighter">23.4%</div><div className={`w-full bg-black/20 rounded-full h-2 mt-6 overflow-hidden border ${theme.border} shadow-inner`}><div className="bg-[#58a6ff] h-full rounded-full shadow-[0_0_15px_rgba(88,166,255,0.4)]" style={{ width: "23%" }}></div></div></CardContent></Card>
-              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Ingest Pulse</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#347d39] tracking-tighter">{livePaths.filter(p=>p.ready).length}</div><p className="text-[11px] mt-4 font-black uppercase text-[#768390] tracking-widest">Active publishers online</p></CardContent></Card>
-              <Card className={`${theme.card} p-8 rounded-3xl shadow-xl border-none`}><CardHeader className="p-0 pb-4"><CardTitle className="text-[11px] text-[#768390] uppercase font-black tracking-[0.2em]">Network Outbound</CardTitle></CardHeader><CardContent className="p-0"><div className="text-5xl font-black text-[#cf222e] tracking-tighter">45.2 MB/s</div><p className="text-[11px] mt-4 font-black uppercase text-[#768390] tracking-widest">Readers: {livePaths.reduce((a,c)=>a+(c.readers?.length||0), 0)}</p></CardContent></Card>
-            </div>
-            <Card className={`${theme.card} border-none rounded-3xl overflow-hidden shadow-2xl`}>
-              <CardHeader className={`px-10 py-6 border-b ${theme.header} bg-black/10`}><CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-4">Node Telemetry Broadcast Log <Badge className="bg-[#347d39] text-[10px] px-3 animate-pulse border-none text-white">LIVE FEED</Badge></CardTitle></CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className={`h-96 w-full p-10 text-[12px] font-mono leading-relaxed bg-[#1c2128] shadow-inner`}>
-                  <div className="text-[#58a6ff] font-bold">[HANDSHAKE] UI protocol linked to master node at {serverIP}</div>
-                  <div className="text-[#768390] mt-1 font-bold">[VERSION] Running MediaMTX Matrix Pro v3.4.0-Stable</div>
-                  <Separator className="my-6 opacity-10" />
-                  {livePaths.map(p => <div key={p.name} className="text-[#347d39] mt-2 font-bold">[INGEST] Stream route '{p.name}' verified. Transmitting to {getStatus(p.name).readers} readers.</div>)}
-                  <div className="text-white/5 animate-pulse mt-8 select-none tracking-widest">_ scanning heartbeat...</div>
+                <ScrollArea className="h-[600px]">
+                  <table className="w-full text-left border-collapse">
+                    <thead className={`text-[10px] uppercase font-black ${theme.textMuted} bg-[#22272e]/50`}>
+                      <tr>
+                        <th className="px-8 py-5 border-b border-[#444c56]/30">Stream Name / Expiry Label</th>
+                        <th className="px-8 py-5 border-b border-[#444c56]/30">Ingest Source</th>
+                        <th className="px-8 py-5 border-b border-[#444c56]/30">Type</th>
+                        <th className="px-8 py-5 border-b border-[#444c56]/30 text-right">Life Extensions / Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm">
+                      {sortedPathsTab.map(p => {
+                        const status = getStatus(p.name);
+                        return (
+                          <tr key={p.name} className={`border-b border-[#444c56]/20 hover:bg-[#58a6ff]/5 transition-colors group`}>
+                            <td className="px-8 py-5 font-bold flex flex-col gap-1">
+                              {p.name}
+                              <div className="flex gap-2">
+                                {status.isLive ? <Badge className="bg-green-500/20 text-green-500 border-none text-[9px] px-2 h-4">ACTIVE</Badge> : <Badge className="bg-slate-500/20 text-slate-500 border-none text-[9px] px-2 h-4">IDLE</Badge>}
+                              </div>
+                            </td>
+                            <td className="px-8 py-5 font-mono text-[10px] text-[#768390]">{p.source || "publisher"}</td>
+                            <td className="px-8 py-5"><Badge variant="outline" className={p.sourceOnDemand ? "text-[#58a6ff] border-[#58a6ff]" : "text-slate-500 border-slate-700"}>{p.sourceOnDemand ? "ON_DEMAND" : "ALWAYS_ON"}</Badge></td>
+                            <td className="px-8 py-5 text-right flex justify-end gap-2">
+                              {/* --- NEW: +1 YEAR RENEW BUTTON --- */}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                disabled={status.isLive}
+                                onClick={() => api.renewPath(p.name, p.source || "publisher").then(fetchPaths)}
+                                className={`h-9 border-[#238636] text-[#238636] hover:bg-[#238636] hover:text-white font-black text-[10px] transition-all px-4 ${status.isLive ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              >
+                                <Sparkles size={14} className="mr-2" /> +1 YEAR LIFE
+                              </Button>
+                              
+                              <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-500/10 h-9 w-9" onClick={() => api.deletePath(p.name).then(fetchPaths)}><Trash2 size={16} /></Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </ScrollArea>
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* TAB 5: AUTHENTICATION */}
+          <TabsContent value="auth">
+            <Card className={`${theme.card} border-none shadow-xl`}>
+              <CardHeader><CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2"><Lock size={16} /> Access Control</CardTitle></CardHeader>
+              <CardContent className="space-y-8 p-10">
+                <div className="grid grid-cols-2 gap-10">
+                  <div className="space-y-4">
+                    <h3 className="font-black text-lg">API Authentication</h3>
+                    <p className={`${theme.textMuted} text-xs`}>Restrict access to the MediaMTX API via JWT or Basic Auth.</p>
+                    <div className="flex items-center gap-4">
+                      <Button variant="outline" className={theme.border}>Rotate Keys</Button>
+                      <Badge className="bg-orange-500">SECURITY: HIGH</Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="font-black text-lg">Path Permissions</h3>
+                    <div className="p-4 bg-[#22272e] rounded-xl border border-[#444c56] font-mono text-[10px]">
+                      Default: Read(All) / Write(Admin)
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB 6: MONITORING & STATS */}
+          <TabsContent value="monitoring">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className={`${theme.card} p-10 border-none text-center shadow-xl hover:scale-105 transition-transform`}>
+                <Activity className="mx-auto text-green-500 mb-4" size={56} />
+                <div className="text-4xl font-black">{livePaths.filter(p => p.ready).length}</div>
+                <div className="text-[10px] uppercase font-black text-slate-500 mt-2 tracking-widest">Live Ingests</div>
+              </Card>
+              <Card className={`${theme.card} p-10 border-none text-center shadow-xl hover:scale-105 transition-transform`}>
+                <Globe className="mx-auto text-blue-500 mb-4" size={56} />
+                <div className="text-4xl font-black">{livePaths.reduce((acc, p) => acc + (p.readers?.length || 0), 0)}</div>
+                <div className="text-[10px] uppercase font-black text-slate-500 mt-2 tracking-widest">Active Readers</div>
+              </Card>
+              <Card className={`${theme.card} p-10 border-none text-center shadow-xl hover:scale-105 transition-transform`}>
+                <Clock className="mx-auto text-purple-500 mb-4" size={56} />
+                <div className="text-4xl font-black">99.9%</div>
+                <div className="text-[10px] uppercase font-black text-slate-500 mt-2 tracking-widest">Uptime Index</div>
+              </Card>
+            </div>
+            <Card className={`mt-8 ${theme.card} border-none shadow-xl`}>
+              <CardHeader><CardTitle className="text-sm font-black uppercase tracking-widest">Real-time Bitrate Graph</CardTitle></CardHeader>
+              <CardContent className="h-64 flex items-center justify-center italic text-slate-500">
+                [ Network Telemetry Visualizer Loading... ]
+              </CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
       </div>
 
-      {/* PREVIEW MODAL */}
+      {/* FLOATING PREVIEW PLAYER */}
       {selectedStream && (
         <div className={`fixed bottom-10 right-10 w-[550px] shadow-[0_40px_100px_rgba(0,0,0,0.9)] border-2 border-[#58a6ff]/50 rounded-[40px] overflow-hidden bg-black z-50 animate-in zoom-in-95 duration-500`}>
           <div className={`px-8 py-5 border-b ${theme.border} text-[11px] font-black tracking-[0.2em] flex justify-between items-center text-[#58a6ff] uppercase ${isDark ? 'bg-[#373e47]' : 'bg-white'}`}>
@@ -483,11 +512,20 @@ function MediaMTXDashboard() {
             <button className="bg-black/20 px-4 py-2 rounded-2xl border border-[#444c56] hover:bg-[#cf222e] hover:border-transparent hover:text-white transition-all text-[#f0f6fc]" onClick={() => setSelectedStream(null)}>EXIT MONITOR [X]</button>
           </div>
           <div className="p-1 bg-[#1c2128]"><StreamPlayer pathName={selectedStream} /></div>
-          <div className={`p-6 flex justify-center border-t ${theme.border} ${isDark ? 'bg-[#373e47]' : 'bg-slate-50'}`}>
-            <Badge variant="outline" className="text-[#347d39] border-[#347d39]/30 font-mono text-[11px] uppercase tracking-widest px-4 py-1">H.264 PASSTHROUGH / ZERO-COPY LINK ACTIVE</Badge>
-          </div>
         </div>
       )}
+
+      {/* ADD PATH DIALOG */}
+      <Dialog open={isAddPathDialogOpen} onOpenChange={setIsAddPathDialogOpen}>
+        <DialogContent className={`${theme.card} ${theme.text} border-none`}>
+          <DialogHeader><DialogTitle className={theme.text}>Create New Path Configuration</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2"><Label className="text-xs uppercase font-bold text-slate-500">Path Name</Label><Input value={newPath.name} onChange={e => setNewPath({...newPath, name: e.target.value})} className={theme.input} /></div>
+            <div className="space-y-2"><Label className="text-xs uppercase font-bold text-slate-500">Source Type</Label><Input value={newPath.source} onChange={e => setNewPath({...newPath, source: e.target.value})} className={theme.input} /></div>
+          </div>
+          <DialogFooter><Button onClick={handleCreatePath} className="bg-[#238636] text-white font-bold w-full h-12">Register Path</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
